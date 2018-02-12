@@ -1,9 +1,106 @@
 package com.loncoto.AirlineAnalysis.utils;
 
+import java.util.Arrays;
+
 import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 
 public class ArilineDataUtil {
+	
+	public static boolean isHeaderExo(Text ligne) {
+		String[] champs = ligne.toString().split(",");
+		return (champs.length > 0 && champs[0].equalsIgnoreCase("\"iata\""));
+	}
+	
+	public static String[] parseAirportDetails(Text line){
+		String[] champs  = line.toString().split(",");
+		champs[0] = champs[0].replaceAll("\"", "");
+		return champs;
+	}
+	
+	public static String[] parseAirportDetailsCorr(Text line){
+		String[] champs  = line.toString().split("\",\"");
+		if (champs.length == 5){
+			String[] champsSup = champs[4].split(",");
+			champsSup[0] = champsSup[0].replaceAll("\"", "");
+			champs[0] = champs[0].replace("\"", "");
+			// jaugmente la taille du tavleau de 2case pour ajout long et lat
+			champs = Arrays.copyOf(champs, 7);
+			champs[4] = champsSup[0];
+			champs[5] = champsSup[1];
+			champs[6] = champsSup[2];
+		}else{
+			// il a un pb avc les donnee airport 
+			// on le remplit a peu pres pour puvoir continurer 
+			champs = Arrays.copyOf(champs, 7);
+			champs[0] = champs[0].replaceAll("\"", "");
+		}
+		return champs;
+	}
+	
+	public static String[] parseCompanyDetails(Text line) {
+		String[] champs = line.toString().split("\",\"");
+		champs[0] = champs[0].replaceAll("\"", "");
+		champs[1] = champs[1].replaceAll("\"", "");
+		return champs;
+	}
+
+	public static InfoVol parseInfosVolsDelayFromText(Text line) {
+		String champs[] = line.toString().split(",");
+		InfoVol vol = new InfoVol();
+		
+		vol.annee = new IntWritable(Integer.parseInt(getYear(champs)));
+		vol.mois = new IntWritable(Integer.parseInt(getMonth(champs)));
+		vol.date = new IntWritable(Integer.parseInt(champs[2]));
+		vol.aeroportArrivee = new Text(getDestination(champs));
+		vol.aeroportDepart = new Text(getOrigin(champs));
+		vol.compagnie = new Text(getUniqueCarrier(champs));
+		vol.retardDepart = new IntWritable(parseMinutes(getDepartureDelay(champs), 0));
+		vol.retardArrivee = new IntWritable(parseMinutes(getArrivalDelay(champs), 0));
+		int status = InfoVol.NORMAL;
+		if (parseBoolean(getCancelled(champs), false)) {
+			status = InfoVol.CANCELLED;
+		}
+		else if (parseBoolean(getDiverted(champs), false)) {
+			status = InfoVol.DIVERTED;	
+		}
+		vol.status = new IntWritable(status);
+		return vol;
+	}
+	
+	public static Text infosVolToText(InfoVol vol) {
+		StringBuilder sb = new StringBuilder();
+		sb.append(vol.mois).append(',');
+		sb.append(vol.annee).append(',');
+		sb.append(vol.date).append(',');
+		sb.append(vol.retardDepart).append(',');
+		sb.append(vol.retardArrivee).append(',');
+		sb.append(vol.aeroportDepart).append(',');
+		sb.append(vol.aeroportArrivee).append(',');
+		sb.append(vol.compagnie).append(',');
+		sb.append(vol.status);
+		return new Text(sb.toString());
+	}
+
+	public static InfoVol textToInfoVol(Text txt) {
+		String[] champs = txt.toString().split(",");
+		
+		InfoVol vol = new InfoVol();
+		vol.mois = new IntWritable(ArilineDataUtil.parseMinutes(champs[0],	0));
+		vol.annee = new IntWritable(ArilineDataUtil.parseMinutes(champs[1],	0));
+		vol.date = new IntWritable(ArilineDataUtil.parseMinutes(champs[2],	0));
+		vol.retardDepart = new IntWritable(ArilineDataUtil.parseMinutes(champs[3],	0));
+		vol.retardArrivee = new IntWritable(ArilineDataUtil.parseMinutes(champs[4],	0));
+		vol.aeroportDepart = new Text(champs[5]);
+		vol.aeroportArrivee = new Text(champs[6]);
+		vol.compagnie = new Text(champs[7]);
+		vol.status = new IntWritable(ArilineDataUtil.parseMinutes(champs[8], 0));
+
+		return vol;
+	}
+
+	
 	// cette fonction détecte si la ligne passée est la ligne aec les intitulés des colonnes
 	public static boolean isHeader(Text ligne) {
 		String[] champs = ligne.toString().split(",");
